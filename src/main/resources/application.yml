@@ -90,9 +90,9 @@ springdoc:
 
 cache:
   jwk-signing-keys-cache-specs: initialCapacity=25,maximumSize=25,expireAfterWrite=1h
-  user-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=1h
-  journal-entry-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=10m
-  photo-entry-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=10m
+  user-cache-specs: initialCapacity=25,maximumSize=1000,expireAfterWrite=1h
+  journal-entry-cache-specs: initialCapacity=25,maximumSize=1000,expireAfterWrite=10m
+  photo-entry-cache-specs: initialCapacity=25,maximumSize=1000,expireAfterWrite=10m
 
 # ClientExecutionTimeout acts as an SLA for the response times from dynamo.
 # https://aws.amazon.com/blogs/database/tuning-aws-java-sdk-http-request-settings-for-latency-aware-amazon-dynamodb-applications/

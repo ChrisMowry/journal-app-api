@@ -40,22 +40,23 @@ public class CachingConfiguration {
     CaffeineCache usersCache =
         new CaffeineCache(
             USER_CACHE_NAME,
-            Caffeine.from(cacheProperties.getUserCacheSpecs()).build()
+            Caffeine.from(cacheProperties.getUserCacheSpecs()).recordStats().build()
         );
 
     CaffeineCache journalEntryCache =
         new CaffeineCache(
             JOURNAL_ENTRY_CACHE_NAME,
-            Caffeine.from(cacheProperties.getJournalEntryCacheSpecs()).build()
+            Caffeine.from(cacheProperties.getJournalEntryCacheSpecs()).recordStats().build()
         );
 
     CaffeineCache photoEntryCache =
         new CaffeineCache(
             PHOTO_ENTRY_CACHE_NAME,
-            Caffeine.from(cacheProperties.getPhotoEntryCacheSpecs()).build()
+            Caffeine.from(cacheProperties.getPhotoEntryCacheSpecs()).recordStats().build()
         );
 
     manager.setCaches(List.of(usersCache, journalEntryCache, photoEntryCache));
+
     return manager;
   }
 }

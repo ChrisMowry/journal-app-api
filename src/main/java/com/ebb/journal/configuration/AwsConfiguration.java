@@ -32,7 +32,7 @@ public class AwsConfiguration {
 
   @Bean
   public DynamoDbClient getDynamoDBClient() throws URISyntaxException {
-    if (this.awsProperties.getDynamodb().isLocal()) {
+    if (this.awsProperties.isLocal()) {
       return DynamoDbClient.builder()
           .endpointOverride(
               new URI(this.awsProperties.getDynamodb().getEndpointUri()))

@@ -3,7 +3,12 @@ package com.ebb.journal.service;
 
 import com.amazonaws.services.cloudfront.CloudFrontUrlSigner;
 import com.ebb.journal.configuration.AwsProperties;
+import com.ebb.journal.exception.ServerErrorException;
 import jakarta.annotation.PostConstruct;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -30,7 +35,7 @@ public class CloudFrontService {
   }
 
   @PostConstruct
-  public void init() {
+  public void init() throws IOException {
     this.privateKey = loadPrivateKey();
   }
 
@@ -57,14 +62,21 @@ public class CloudFrontService {
   /**
    * Fetch private key from Secrets Manager
    */
-  private PrivateKey loadPrivateKey() {
-    String pem = secretsClient.getSecretValue(
-        GetSecretValueRequest.builder()
-            .secretId(this.awsProperties.getCloudfront().getPrivateKeySecretName())
-            .build()
-    ).secretString();
+  private PrivateKey loadPrivateKey()  {
+    try {
+      String pem = awsProperties.isLocal()
+          ? Files.readString(Path.of(awsProperties.getCloudfront().getPrivateKeyFilePath()),
+          Charset.defaultCharset())
+          : secretsClient.getSecretValue(
+              GetSecretValueRequest.builder()
+                  .secretId(this.awsProperties.getCloudfront().getPrivateKeySecretName())
+                  .build()
+          ).secretString();
 
-    return parsePrivateKey(pem);
+      return parsePrivateKey(pem);
+    } catch (IOException ex){
+      throw new ServerErrorException("Failed to load CloudFront private key", ex);
+    }
   }
 
   /**
@@ -89,7 +101,7 @@ public class CloudFrontService {
     }
   }
 
-  private void ensureKeyLoaded() {
+  private void ensureKeyLoaded(){
     if (privateKey == null) {
       synchronized (this) {
         if (privateKey == null) {

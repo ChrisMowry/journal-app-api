@@ -1,16 +1,7 @@
-# For implementation details, see SecurityConfiguration.java
-authentication:
-  # TODO: add PRD issuer URIs
-  issuerUris: []
-  # TODO: add PRD JWK Set URI
-  jwkSetUri:
-  # TODO: add PRD audiences
-  audiences: []
-
 aws:
   local: true
   dynamodb:
-    tableName: journal-data-local
+    tableName: journal-data-test
     endpointUri: http://localhost:8000
   cloudfront:
     keyPairId: abc #TODO fill this in when setup

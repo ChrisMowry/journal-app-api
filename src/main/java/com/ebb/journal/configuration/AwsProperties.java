@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class AwsProperties {
 
   private String region;
+  private boolean local = Boolean.FALSE;
   private DynamoDb dynamodb = new DynamoDb();
   private CloudFront cloudfront = new CloudFront();
   private S3 s3 = new S3();
@@ -20,7 +21,6 @@ public class AwsProperties {
   public static class DynamoDb {
     private String tableName;
     private int clientExecutionTimeout;
-    private boolean local = Boolean.FALSE;
     private String endpointUri;
   }
 
@@ -29,6 +29,7 @@ public class AwsProperties {
     private String keyPairId;
     private String privateKeySecretName;
     private String distributionDomain;
+    private String privateKeyFilePath;
   }
 
   @Data
