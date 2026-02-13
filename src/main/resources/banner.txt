@@ -1,0 +1,9 @@
+${Ansi.DEFAULT}============================================================================
+${AnsiColor.BRIGHT_GREEN}8-Bit Bird Microservices
+${Ansi.DEFAULT}============================================================================
+${AnsiColor.BLUE}Service Name: ${spring.application.name}
+${AnsiColor.BLUE}Service Version: ${spring.application.version}
+${AnsiColor.BLUE}Spring Boot Version: ${spring-boot.formatted-version}
+${AnsiColor.BLUE}Compiled Spring profiles: ${spring.profiles.active}
+${AnsiColor.BLUE}Java Version: ${java.version}
+${Ansi.DEFAULT}============================================================================

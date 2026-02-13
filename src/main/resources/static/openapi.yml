@@ -1,0 +1,535 @@
+openapi: 3.1.0
+
+info:
+  title: Journal App API
+  version: 1.0.0
+  description: An API for managing data in the Journal App.
+  contact:
+    email: info@8bitbird.com
+
+# Define the servers where the API is hosted
+# TODO: Update urls when domain is purchased
+servers:
+  - url: https://api.example.com/authenticated/v1
+    description: Production server
+  - url: https://dev-api.example.com/authenticated/v1
+    description: Development server
+  - url: http://localhost:8080/authenticated/v1
+    description: Local development server
+tags:
+  - name: Authenticated
+    description: Authenticated endpoints requiring JWT authentication.
+
+paths:
+  /user:
+    get:
+      summary: Get current authenticated user data.
+      operationId: getUser
+      tags:
+        - Authenticated
+      responses:
+        "200":
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+    post:
+      summary: Create or update a user.
+      operationId: upsertUser
+      tags:
+        - Authenticated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUploadRequest"
+      responses:
+        "200":
+          description: User created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request
+        "401":
+          description: Unauthorized
+      security:
+        - jwtAuth: [ ]
+
+    delete:
+      summary: Delete current authenticated user, all journal entries and photo entries.
+      operationId: deleteUser
+      tags:
+        - Authenticated
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+  /journal:
+    post:
+      summary: Create or update a journal entry for the authenticated user.
+      operationId: upsertJournalEntry
+      tags:
+        - Authenticated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryUploadRequest"
+      responses:
+        "200":
+          description: List of journal entries for the month and day.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+  /journal/{monthDate}:
+    get:
+      summary: Get the journal entries for all years for the specified month and date for the authenticated user.
+      operationId: getJournalEntriesByMonthDate
+      tags:
+        - Authenticated
+      parameters:
+        - name: monthDate
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+            example: '03-15'
+      responses:
+        "200":
+          description: List of journal entries for all years for the specified month and date
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+  /journal/{monthDate}/{year}/photo:
+    post:
+      summary: Uploads a photo for a specific journal entry for the authenticated user.
+      operationId: upsertPhotoEntry
+      tags:
+        - Authenticated
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/PhotoEntryUploadRequest"
+      responses:
+        "200":
+          description: A list of photo entries for the month, day and year.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PhotoEntry"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+  /journal/{monthDate}/{year}/photo/{photoId}:
+    get:
+      summary: Get a specific photo entry by id for the authenticated user.
+      operationId: getPhotoEntryById
+      tags:
+        - Authenticated
+      parameters:
+        - name: monthDate
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+            example: '03-15'
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1900
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+      responses:
+        "200":
+          description: Photo entry data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoEntry"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Photo entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+    delete:
+      summary: Deletes a specific photo entry by ID for the authenticated user.
+      operationId: deletePhotoEntryById
+      tags:
+        - Authenticated
+      parameters:
+        - name: monthDate
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+            example: '03-15'
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1900
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+      responses:
+        "204":
+          description: Photo entry deleted
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Photo entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - jwtAuth: [ ]
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - userId
+        - firstName
+        - lastName
+        - email
+      properties:
+        userId:
+          type: string
+          description: Unique identifier for the user
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+          pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        isEmailVerified:
+          type: boolean
+        phoneNumber:
+          type: string
+          description: E.164 phone number format
+          pattern: '^\+[1-9]\d{7,14}$'
+          example: '+15554443333'
+        isPhoneNumberVerified:
+          type: boolean
+        billingAddress:
+          $ref: "#/components/schemas/Address"
+        deliveryAddress:
+          $ref: "#/components/schemas/Address"
+        lastLogin:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+        created:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+        lastModified:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+
+    UserUploadRequest:
+      type: object
+      required:
+        - userId
+        - firstName
+        - lastName
+        - email
+      properties:
+        userId:
+          type: string
+          description: Unique identifier for the user
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+          description: E.164 phone number format
+          pattern: '^\+[1-9]\d{7,14}$'
+          example: '+15554443333'
+        billingAddress:
+          $ref: "#/components/schemas/Address"
+        deliveryAddress:
+          $ref: "#/components/schemas/Address"
+
+    Address:
+      type: object
+      required:
+        - addressLine1
+        - city
+        - state
+        - zipCode
+      properties:
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zipCode:
+          type: string
+
+    JournalEntry:
+      type: object
+      required:
+        - monthDate
+        - year
+        - entry
+      properties:
+        monthDate:
+          description: Month and Day in MM-DD format
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+          example: '03-15'
+        year:
+          type: integer
+          minimum: 1900
+        entry:
+          description: The journal entry text
+          type: string
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoEntry"
+        created:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+        lastModified:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+
+    JournalEntryUploadRequest:
+      type: object
+      required:
+        - email
+        - monthDate
+        - year
+        - entry
+      properties:
+        monthDate:
+          description: Month and Day in MM-DD format
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+          example: '03-15'
+        year:
+          type: integer
+          minimum: 1900
+        entry:
+          description: The journal entry text
+          type: string
+
+    PhotoEntry:
+      type: object
+      required:
+        - photoId
+        - url
+      properties:
+        photoId:
+          type: integer
+          description: Unique identifier for the photo
+          minimum: 1
+          maximum: 3
+        description:
+          description: Description of the photo
+          type: string
+        url:
+          type: string
+          format: uri
+        thumbnailUrl:
+          type: string
+          format: uri
+        created:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+        lastModified:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:00:00Z'
+
+    PhotoEntryUploadRequest:
+      type: object
+      required:
+        - photoId
+        - photo
+      properties:
+        photoId:
+          type: integer
+          description: Unique identifier for the photo
+          minimum: 1
+          maximum: 3
+        description:
+          description: Description of the photo.
+          type: string
+        photo:
+          type: string
+          format: binary
+          description: Base64 encoded image data.
+
+    ErrorResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "about:blank"
+        title:
+          type: string
+          example: "Bad Request"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "Detailed error message"
+        instance:
+          type: string
+          example: "/authenticated/v1/user"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

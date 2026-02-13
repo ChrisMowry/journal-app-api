@@ -1,0 +1,19 @@
+# For implementation details, see SecurityConfiguration.java
+authentication:
+  # TODO: add PRD issuer URIs
+  issuerUris: []
+  # TODO: add PRD JWK Set URI
+  jwkSetUri:
+  # TODO: add PRD audiences
+  audiences: []
+
+aws:
+  dynamodb:
+    tableName: journal-data-dev
+    local: false
+  cloudfront:
+    keyPairId: abc #TODO fill this in when setup
+    distributionDomain: "d123abc.cloudfront.net" #TODO fill this in when setup
+    privateKeySecretName: cloudformation-private-key-dev
+  s3:
+    bucketName: journal-data-photos-dev

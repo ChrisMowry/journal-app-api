@@ -1,0 +1,113 @@
+spring:
+  application:
+    name: '@project.name@'
+    version: '@project.version@'
+  banner:
+    location: classpath:/banner.txt
+  profiles:
+    active: local
+  threads:
+    virtual:
+      enabled: true
+  web:
+    error:
+      include-message: always
+      include-binding-errors: always
+
+logging:
+  level:
+    root: INFO
+    com:
+      ebb:
+        journal:
+          configuration: DEBUG
+          controller: DEBUG
+          dao: DEBUG
+          exception: DEBUG
+          event: DEBUG
+          model: DEBUG
+          security: INFO
+          service: DEBUG
+          transformer: DEBUG
+    org:
+      springframework:
+        security: INFO
+        web: ERROR
+
+server:
+  port: 8080
+  max-http-request-header-size: 60KB
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  metrics:
+    distribution:
+      percentiles:
+        http:
+          server:
+            requests: 0.98, 0.95
+  server:
+    port: 8081
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+info:
+  title: '@project.name@'
+  description: '@project.description@'
+  version: '@project.version@'
+  gitlab: '@project.url@'
+  contact:
+    name: '@project.organization.name@'
+    email: '@org-email@'
+    url: '@project.organization.url@'
+
+authentication:
+  jwsAlgorithms: [ RS256 ]
+  # Values below are in milliseconds
+  jwksConnectTimeout: 6000 # 6s
+  jwksRequestTimeout: 6000
+  jwksCacheTtl: 3600000 # 1 hour
+  jwksCacheRefreshTimeout: 6000 # 6 seconds
+  jwksOutageToleranceTtl: 900000 # 15 minutes
+  jwksCacheSizeLimit: 51200 # 50 KB
+  jwksRetryEnabled: true
+  jwksRateLimiterEnabled: true
+
+springdoc:
+  swagger-ui:
+    url: /openapi.yml
+    enabled: true
+  api-docs:
+    enabled: true
+    path: /api-docs
+
+cache:
+  jwk-signing-keys-cache-specs: initialCapacity=25,maximumSize=25,expireAfterWrite=1h
+  user-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=1h
+  journal-entry-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=10m
+  photo-entry-cache-specs: initialCapacity=25,maximumSize=1000,refreshAfterWrite=10m
+
+# ClientExecutionTimeout acts as an SLA for the response times from dynamo.
+# https://aws.amazon.com/blogs/database/tuning-aws-java-sdk-http-request-settings-for-latency-aware-amazon-dynamodb-applications/
+aws:
+  region: us-west-2
+  dynamodb:
+    client-execution-timeout: 5000
+
+resilience4j:
+  retry:
+    instances:
+      serviceWriteOperation:
+        maxAttempts: 5
+        waitDuration: 50ms
+        enableExponentialBackoff: true
+        exponential-backoff-multiplier: 2
+        retryExceptions:
+          - com.ebb.journal.exception.RetryableException
