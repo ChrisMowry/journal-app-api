@@ -1,0 +1,529 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to manage the journal api resources
+Parameters:
+  ServiceName:
+    Type: String
+    Description: Name of the service
+  Env:
+    Default: dev
+    Type: String
+    Description: Deployment Environment
+    AllowedValues:
+      - dev
+      - prd
+  CloudFrontEncodedPublicKeyValue:
+    Type: String
+    Description: Base64 encoded CloudFront public key (PEM format, without the header and footer)
+  DomainName:
+    Type: String
+    Description: Custom domain name for CloudFront distribution (e.g., example.com)
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID for the domain
+Conditions:
+  IsProduction: !Equals [!Ref Env, prd]
+Resources:
+  # ----------------------
+  # DynamoDB Table for Journal App Data
+  # ----------------------
+  JournalAppDataDynamoDbTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !If
+        - IsProduction
+        - !Sub '${ServiceName}-data'
+        - !Sub '${ServiceName}-data-${Env}'
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+  # ----------------------
+  # Cognito User Pool
+  # ----------------------
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !If
+        - IsProduction
+        - !Sub '${ServiceName}-user-pool'
+        - !Sub '${ServiceName}-user-pool-${Env}'
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      MfaConfiguration: OFF
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+  # ----------------------
+  # Cognito User Pool Client
+  # ----------------------
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !If
+        - IsProduction
+        - !Sub '${ServiceName}-user-pool-client'
+        - !Sub '${ServiceName}-user-pool-client-${Env}'
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      RefreshTokenValidity: 30          # 30 days validity
+      EnableTokenRevocation: true       # Enables refresh token rotation
+      PreventUserExistenceErrors: ENABLED
+  # ----------------------
+  # S3 Bucket
+  # ----------------------
+  PhotoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - IsProduction
+        - !Sub '${ServiceName}-photos'
+        - !Sub '${ServiceName}-photos-${Env}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PhotoBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${PhotoBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+  # ----------------------
+  # CloudFront Key Group (for signed URLs)
+  # ----------------------
+  CloudFrontPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref "AWS::StackName"
+        Name: !If
+          - IsProduction
+          - !Sub '${ServiceName}-cloudfront-public-key'
+          - !Sub '${ServiceName}--cloudfront-public-key-${Env}'
+        EncodedKey: !Ref CloudFrontEncodedPublicKeyValue
+        Comment: "Public key for CloudFront signed URLs"
+  CloudFrontKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !If
+          - IsProduction
+          - !Sub '${ServiceName}-cloudfront-public-key-group'
+          - !Sub '${ServiceName}--cloudfront-public-key-group-${Env}'
+        Items:
+          - !Ref CloudFrontPublicKey
+        Comment: "Key group for signing CloudFront URLs"
+  # ----------------------
+  # CloudFront Origin Access Control
+  # ----------------------
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !If
+          - IsProduction
+          - !Sub '${ServiceName}-photos-oac'
+          - !Sub '${ServiceName}-photos-oac-${Env}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  # ----------------------
+  # CloudFront Distribution
+  # ----------------------
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: ""
+        Aliases:
+          - !Sub '${DomainName}'
+          - !Sub 'www.${DomainName}'
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CloudFrontCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt PhotoBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref CloudFrontOAC
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          TrustedKeyGroups:
+            - !Ref CloudFrontKeyGroup
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+  # ----------------------
+  # ACM Certificate for Custom Domain
+  # ----------------------
+  CloudFrontCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '${DomainName}'
+      SubjectAlternativeNames:
+        - !Sub 'www.${DomainName}'
+      DomainValidationOptions:
+        - DomainName: !Sub '${DomainName}'
+          ValidationDomain: !Sub '${DomainName}'
+        - DomainName: !Sub 'www.${DomainName}'
+          ValidationDomain: !Sub '${DomainName}'
+      ValidationMethod: DNS
+  # ----------------------
+  # Route 53 DNS Records
+  # ----------------------
+  CloudFrontDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub '${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront Hosted Zone ID (same for all regions)
+        EvaluateTargetHealth: false
+  CloudFrontWWWDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'www.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  # For better control, you might want a custom VPC
+  ECSTaskVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  ECSTaskSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ECSTaskVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref ECSTaskVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+ALBSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Security group for ALB
+    VpcId: !Ref ECSTaskVPC
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+    SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+
+  JournalAppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ServiceName}-alb-${Env}'
+      Subnets:
+        - !Ref ECSTaskSubnet
+        - !Ref ECSTaskSubnet2  # Add at least 2 for high availability
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Type: application
+      Scheme: internet-facing
+
+  JournalAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ServiceName}-tg-${Env}'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref ECSTaskVPC
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  JournalAppALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref JournalAppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref JournalAppTargetGroup
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ServiceName}-ecs-task-execution-role-${Env}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ServiceName}'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${ServiceName}-${Env}:*'
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ServiceName}-ecs-task-role-${Env}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt JournalAppDataDynamoDbTable.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${PhotoBucket.Arn}/*'
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:GetUser
+                  - cognito-idp:AdminGetUser
+                Resource: !GetAtt CognitoUserPool.Arn
+
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${ServiceName}-${Env}'
+      RetentionInDays: 7
+
+  JournalAppECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${ServiceName}-cluster-${Env}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  JournalAppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family:
+      !Sub '${ServiceName}-task-${Env}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'  # 256, 512, 1024, 2048, 4096
+      Memory: '512'  # Must match CPU
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub '${ServiceName}-container'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ServiceName}:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: !If [ IsProduction, 'prd', 'dev' ]
+            - Name: DYNAMODB_TABLE_NAME
+              Value: !Ref JournalAppDataDynamoDbTable
+            - Name: S3_BUCKET_NAME
+              Value: !Ref PhotoBucket
+            - Name: COGNITO_USER_POOL_ID
+              Value: !Ref CognitoUserPool
+
+  JournalAppECSService:
+    Type: AWS::ECS::Service
+    DependsOn: JournalAppALBListener
+    Properties:
+      ServiceName:
+        !If
+        - IsProduction
+        - !Sub '${ServiceName}-service'
+        - !Sub '${ServiceName}-service-${Env}'
+      Cluster: !Ref JournalAppECSCluster
+      TaskDefinition: !Ref JournalAppTaskDefinition
+      DesiredCount: !If [ IsProduction, 2, 1 ]
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref ECSTaskSubnet
+            - !Ref ECSTaskSubnet2
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Sub '${ServiceName}-container'
+          ContainerPort: 8080
+          TargetGroupArn: !Ref JournalAppTargetGroup
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 4
+      MinCapacity: !If [ IsProduction, 2, 1 ]
+      ResourceId: !Sub 'service/${JournalAppECSCluster}/${JournalAppECSService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  ServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !If
+        - IsProduction
+        - !Sub '${ServiceName}-scaling-policy'
+        - !Sub '${ServiceName}-scaling-policy-${Env}'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 60
+        ScaleInCooldown: 300
+
+  JournalAppECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ServiceName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText:
+          Version: '2012-10-17'
+          Rules:
+            - Priority: 1
+              Action:
+                Type: expire
+              Selection:
+                TagStatus: untagged
+                CountType: sinceImagePushed
+                CountUnit: days
+                CountNumber: 7

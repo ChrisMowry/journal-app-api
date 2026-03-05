@@ -38,7 +38,6 @@
 		<coverage.method.ratio>0.80</coverage.method.ratio>
 		<coverage.class.ratio>0.80</coverage.class.ratio>
 		<aws.java.sdk.version>2.41.19</aws.java.sdk.version>
-		<aws.clounfront.signer.version>1.12.650</aws.clounfront.signer.version>
 		<resilience4j.version>2.3.0</resilience4j.version>
 		<springdoc.openapi.version>3.0.1</springdoc.openapi.version>
 		<jakarta.validation-api.version>3.1.1</jakarta.validation-api.version>
@@ -171,17 +170,16 @@
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 		</dependency>
-		<!-- SDK v1: CloudFront URL signer -->
-		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-java-sdk-cloudfront</artifactId>
-			<version>${aws.clounfront.signer.version}</version>
-		</dependency>
 		<!-- AWS Secrets Manager Client -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>secretsmanager</artifactId>
 			<scope>compile</scope>
+		</dependency>
+		<!-- AWS Cloudfront -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>cloudfront</artifactId>
 		</dependency>
 		<!-- Thumbnailator -->
 		<dependency>

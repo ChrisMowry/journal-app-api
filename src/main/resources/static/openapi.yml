@@ -10,18 +10,116 @@ info:
 # Define the servers where the API is hosted
 # TODO: Update urls when domain is purchased
 servers:
-  - url: https://api.example.com/authenticated/v1
+  - url: https://api.example.com
     description: Production server
-  - url: https://dev-api.example.com/authenticated/v1
+  - url: https://dev-api.example.com
     description: Development server
-  - url: http://localhost:8080/authenticated/v1
+  - url: http://localhost:8080
     description: Local development server
 tags:
+  - name: Public
+    description: Public endpoints that do not require authentication.
   - name: Authenticated
     description: Authenticated endpoints requiring JWT authentication.
 
 paths:
-  /user:
+  /public/v1/auth/register:
+    post:
+      summary: Register a new user.
+      operationId: registerUser
+      tags:
+        - Public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /public/v1/auth/login:
+    post:
+      summary: Log in a user and return the access, id and refresh tokens.
+      operationId: login
+      tags:
+        - Public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              items:
+                $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful, returns access, id and refresh tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                  $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized, invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /public/v1/auth/refresh:
+    post:
+      summary: Refresh access, id and refresh tokens using a valid refresh token.
+      operationId: refreshToken
+      tags:
+        - Public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: Token refreshed successfully, returns new access, id and refresh tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                  $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized, invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authenticated/v1/user:
     get:
       summary: Get current authenticated user data.
       operationId: getUser
@@ -48,7 +146,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security:
         - jwtAuth: [ ]
-
     post:
       summary: Create or update a user.
       operationId: upsertUser
@@ -97,7 +194,7 @@ paths:
       security:
         - jwtAuth: [ ]
 
-  /journal:
+  /authenticated/v1/journal:
     post:
       summary: Create or update a journal entry for the authenticated user.
       operationId: upsertJournalEntry
@@ -133,7 +230,7 @@ paths:
       security:
         - jwtAuth: [ ]
 
-  /journal/{monthDate}:
+  /authenticated/v1/journal/{monthDate}:
     get:
       summary: Get the journal entries for all years for the specified month and date for the authenticated user.
       operationId: getJournalEntriesByMonthDate
@@ -171,7 +268,7 @@ paths:
       security:
         - jwtAuth: [ ]
 
-  /journal/{monthDate}/{year}/photo:
+  /authenticated/v1/journal/{monthDate}/{year}/photo:
     post:
       summary: Uploads a photo for a specific journal entry for the authenticated user.
       operationId: upsertPhotoEntry
@@ -207,7 +304,7 @@ paths:
       security:
         - jwtAuth: [ ]
 
-  /journal/{monthDate}/{year}/photo/{photoId}:
+  /authenticated/v1/journal/{monthDate}/{year}/photo/{photoId}:
     get:
       summary: Get a specific photo entry by id for the authenticated user.
       operationId: getPhotoEntryById
@@ -314,6 +411,73 @@ paths:
 
 components:
   schemas:
+    RegisterUserRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        firstName:
+          type: string
+          pattern: "^[\\p{L} .'-]{1,50}$"
+        lastName:
+          type: string
+          pattern: "^[\\p{L} .'-]{1,50}$"
+        email:
+          type: string
+          format: email
+          pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        phoneNumber:
+          type: string
+          description: E.164 phone number format
+          pattern: "^\\+[1-9]\\d{7,14}$"
+          example: '+15554443333'
+        password:
+          type: string
+          format: password
+        billingAddress:
+          $ref: "#/components/schemas/Address"
+        deliveryAddress:
+          $ref: "#/components/schemas/Address"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          pattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        password:
+          type: string
+          format: password
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Valid refresh token issued during login
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT token to be used for authenticated requests
+        idToken:
+          type: string
+          description: JWT token containing user identity information
+        refreshToken:
+          type: string
+          description: JWT token used to refresh the access and id tokens
+
     User:
       type: object
       required:
@@ -327,8 +491,10 @@ components:
           description: Unique identifier for the user
         firstName:
           type: string
+          pattern: "^[\\p{L} .'-]{1,50}$"
         lastName:
           type: string
+          pattern: "^[\\p{L} .'-]{1,50}$"
         email:
           type: string
           format: email

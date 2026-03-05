@@ -1,0 +1,3 @@
+- the ecs task definition sets the env variable SPRING_PROFILES_ACTIVE to prd or dev
+
+public key gets added as a parameter in CLoudformation template

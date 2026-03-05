@@ -6,6 +6,8 @@ public class Constants {
 
   public static final String KEY_SEPARATOR = "#";
   public static final String USER_SK = "META";
+
+  // Regex patterns for validation
   public static final String NAME_REGEX = "^[\\p{L} .'-]{1,50}$";
   public static final String EMAIL_REGEX = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
   public static final String PHONE_REGEX = "^\\+[1-9]\\d{7,14}$";

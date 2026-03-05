@@ -1,7 +1,6 @@
 package com.ebb.journal.service;
 
 
-import com.amazonaws.services.cloudfront.CloudFrontUrlSigner;
 import com.ebb.journal.configuration.AwsProperties;
 import com.ebb.journal.exception.ServerErrorException;
 import jakarta.annotation.PostConstruct;
@@ -14,14 +13,16 @@ import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Date;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
+import software.amazon.awssdk.services.cloudfront.model.CannedSignerRequest;
+import software.amazon.awssdk.services.cloudfront.url.SignedUrl;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 
 @Service
 public class CloudFrontService {
-
+  private final CloudFrontUtilities CLOUDFRONT_UTILITIES = CloudFrontUtilities.create();
   private final SecretsManagerClient secretsClient;
   private final AwsProperties awsProperties;
 
@@ -48,15 +49,16 @@ public class CloudFrontService {
     String resourceUrl = String.format("https://%s/%s",
         this.awsProperties.getCloudfront().getDistributionDomain(), objectKey);
 
-    Date expiresAt =
-        Date.from(Instant.now().plusSeconds(ttlSeconds));
+    CannedSignerRequest signerRequest = CannedSignerRequest.builder()
+        .resourceUrl(resourceUrl)
+        .privateKey(privateKey)
+        .keyPairId(this.awsProperties.getCloudfront().getKeyPairId())
+        .expirationDate(Instant.now().plusSeconds(ttlSeconds))
+        .build();
 
-    return CloudFrontUrlSigner.getSignedURLWithCannedPolicy(
-        resourceUrl,
-        this.awsProperties.getCloudfront().getKeyPairId(),
-        privateKey,
-        expiresAt
-    );
+    SignedUrl signedUrl = CLOUDFRONT_UTILITIES.getSignedUrlWithCannedPolicy(signerRequest);
+
+    return signedUrl.url();
   }
 
   /**

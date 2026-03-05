@@ -24,7 +24,7 @@ public abstract class AbstractDao<T> {
   private final static String PK_SK_EXIST_EXPRESSION = "attribute_exists(#pk) AND attribute_exists(#sk)";
   private final static String PLACEHOLDER_PK_VALUE = "#pk";
   private final static String PLACEHOLDER_SK_VALUE = "#sk";
-  private final static String PK_FIELD_NAME = "email";
+  private final static String PK_FIELD_NAME = "pk";
   private final static String SK_FIELD_NAME = "sk";
 
   // Builds the condition that checks if the partition and sort values exist in the DynamoDB Database.
