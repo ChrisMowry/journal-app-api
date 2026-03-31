@@ -9,4 +9,3 @@ output "distribution_domain_name" {
 output "distribution_arn" {
   value = aws_cloudfront_distribution.main.arn
 }
-

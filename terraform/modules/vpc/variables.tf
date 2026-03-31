@@ -20,7 +20,7 @@ variable "service_name" {
   type = string
 }
 
-variable "environment" {
+variable "env" {
   type = string
 }
 

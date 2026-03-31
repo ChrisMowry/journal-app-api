@@ -1,13 +1,17 @@
+locals {
+  oac_name = var.env == "prd" ? "${var.service_name}-photos-oac" : "${var.service_name}-photos-oac-${var.env}"
+}
+
 resource "aws_cloudfront_public_key" "main" {
-  name_prefix = "${var.service_name}-cloudfront-public-key-"
+  name = "${var.service_name}-cloudfront-public-key-${var.env}"
   encoded_key = var.cloudfront_encoded_public_key_value
   comment     = "Public key for CloudFront signed URLs"
 }
 
 resource "aws_cloudfront_key_group" "main" {
-  name_prefix = "${var.service_name}-cloudfront-public-key-group-"
   comment     = "Key group for signing CloudFront URLs"
   items       = [aws_cloudfront_public_key.main.id]
+  name        = "${var.service_name}-cloudfront-key-group-${var.env}"
 }
 
 resource "aws_cloudfront_origin_access_control" "main" {
@@ -31,7 +35,8 @@ resource "aws_acm_certificate" "main" {
   }
 
   tags = {
-    Name = "${var.service_name}-cf-cert-${var.environment}"
+    service = var.service_name,
+    env = var.env
   }
 }
 
@@ -110,7 +115,8 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = {
-    Name = "${var.service_name}-cloudfront-${var.environment}"
+    service = var.service_name,
+    env = var.env
   }
 
   depends_on = [aws_acm_certificate_validation.main]
@@ -139,8 +145,3 @@ resource "aws_route53_record" "cloudfront_www_dns" {
     evaluate_target_health = false
   }
 }
-
-locals {
-  oac_name = var.environment == "prd" ? "${var.service_name}-photos-oac" : "${var.service_name}-photos-oac-${var.environment}"
-}
-

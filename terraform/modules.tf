@@ -4,16 +4,14 @@ module "vpc" {
   source = "./modules/vpc"
 
   service_name = var.service_name
-  environment  = local.env
+  env          = local.env
 }
 
 module "dynamodb" {
   source = "./modules/dynamodb"
 
   service_name   = var.service_name
-  environment    = local.env
-  read_capacity  = var.dynamodb_read_capacity
-  write_capacity = var.dynamodb_write_capacity
+  env            = local.env
 }
 
 module "s3" {
@@ -52,7 +50,7 @@ module "fargate" {
   source = "./modules/fargate"
 
   service_name              = var.service_name
-  environment               = local.env
+  env                       = local.env
   vpc_id                    = module.vpc.vpc_id
   subnet_ids                = [module.vpc.subnet_id, module.vpc.subnet2_id]
   security_group_ids        = [module.vpc.ecs_security_group_id]
@@ -62,7 +60,8 @@ module "fargate" {
   ecs_desired_count         = var.ecs_desired_count
   ecs_min_capacity          = var.ecs_min_capacity
   ecs_max_capacity          = var.ecs_max_capacity
-  container_port            = var.container_port
+  task_port                 = var.container_port
+  task_admin_port           = var.task_admin_port
   health_check_path         = var.health_check_path
   logs_retention_in_days    = var.logs_retention_in_days
   dynamodb_table_name       = module.dynamodb.table_name

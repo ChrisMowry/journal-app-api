@@ -1,21 +1,46 @@
+locals {
+  task_name            = var.env == "prd" ? "${var.service_name}-task" : "${var.service_name}-task-${var.env}"
+  container_name       = var.env == "prd" ? "${var.service_name}-container" : "${var.service_name}-container-${var.env}"
+  cluster_name         = var.env == "prd" ? "${var.service_name}-cluster-${var.env}" : "${var.service_name}-cluster-${var.env}"
+  service_name         = var.env == "prd" ? var.service_name : "${var.service_name}-${var.env}"
+  scaling_policy_name  = var.env == "prd" ? "${var.service_name}-scaling-policy" : "${var.service_name}-scaling-policy-${var.env}"
+
+  task_definition_parameters = {
+    environment_name     = var.env == "prd" ? "prd" : "dev"
+    admin_port           = var.task_admin_port
+    task_port            = var.task_port
+    aws_region           = var.aws_region
+    task_name            = local.task_name
+    image_name           = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.service_name}-${var.env}:latest"
+    service_name         = var.service_name
+    task_cpu_primary     = var.ecs_cpu
+    task_memory_primary  = var.ecs_memory
+    dynamodb_table_name  = var.dynamodb_table_name
+    s3_bucket_name       = var.s3_bucket_name
+    cognito_user_pool_id = var.cognito_user_pool_id
+    cloudwatch_log_group = aws_cloudwatch_log_group.main.name
+  }
+}
+
 # ----------------------
 # Application Load Balancer
 # ----------------------
 resource "aws_lb" "main" {
-  name_prefix = "jrnl"
+  name_prefix = "${var.service_name}-${var.env}-alb-"
   internal    = false
   load_balancer_type = "application"
   security_groups    = [var.alb_security_group_id]
   subnets            = var.subnet_ids
 
   tags = {
-    Name = "${var.service_name}-alb-${var.environment}"
+    service = var.service_name,
+    env     = var.env
   }
 }
 
 resource "aws_lb_target_group" "main" {
-  name_prefix = "jrnl"
-  port        = var.container_port
+  name_prefix = "${var.service_name}-${var.env}-tg-"
+  port        = var.task_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -25,12 +50,14 @@ resource "aws_lb_target_group" "main" {
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
+    port                = tostring(var.task_admin_port)
     path                = var.health_check_path
     matcher             = "200"
   }
 
   tags = {
-    Name = "${var.service_name}-tg-${var.environment}"
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -49,11 +76,12 @@ resource "aws_lb_listener" "main" {
 # CloudWatch Logs
 # ----------------------
 resource "aws_cloudwatch_log_group" "main" {
-  name              = "/ecs/${var.service_name}-${var.environment}"
+  name              = "/ecs/${var.service_name}-${var.env}"
   retention_in_days = var.logs_retention_in_days
 
   tags = {
-    Name = "${var.service_name}-ecs-logs-${var.environment}"
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -69,7 +97,8 @@ resource "aws_ecs_cluster" "main" {
   }
 
   tags = {
-    Name = local.cluster_name
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -77,7 +106,7 @@ resource "aws_ecs_cluster" "main" {
 # IAM Roles
 # ----------------------
 resource "aws_iam_role" "ecs_task_execution_role" {
-  name_prefix = "ecs-task-exec-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-exec-role-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -99,7 +128,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_ecr" {
-  name_prefix = "ecs-task-exec-ecr-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-exec-ecr-"
   role        = aws_iam_role.ecs_task_execution_role.id
 
   policy = jsonencode({
@@ -126,7 +155,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_ecr" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_logs" {
-  name_prefix = "ecs-task-exec-logs-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-exec-logs-policy-"
   role        = aws_iam_role.ecs_task_execution_role.id
 
   policy = jsonencode({
@@ -146,7 +175,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_logs" {
 }
 
 resource "aws_iam_role" "ecs_task_role" {
-  name_prefix = "ecs-task-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-role-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -163,7 +192,7 @@ resource "aws_iam_role" "ecs_task_role" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_dynamodb" {
-  name_prefix = "ecs-task-dynamodb-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-dynamodb-policy-"
   role        = aws_iam_role.ecs_task_role.id
 
   policy = jsonencode({
@@ -186,7 +215,7 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_s3" {
-  name_prefix = "ecs-task-s3-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-s3-policy-"
   role        = aws_iam_role.ecs_task_role.id
 
   policy = jsonencode({
@@ -206,7 +235,7 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_cognito" {
-  name_prefix = "ecs-task-cognito-"
+  name_prefix = "${var.service_name}-${var.env}-ecs-task-cognito-policy-"
   role        = aws_iam_role.ecs_task_role.id
 
   policy = jsonencode({
@@ -228,7 +257,7 @@ resource "aws_iam_role_policy" "ecs_task_cognito" {
 # ECS Task Definition
 # ----------------------
 resource "aws_ecs_task_definition" "main" {
-  family                   = "${var.service_name}-task-${var.environment}"
+  family                   = local.task_name
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.ecs_cpu
@@ -236,55 +265,11 @@ resource "aws_ecs_task_definition" "main" {
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
-  container_definitions = jsonencode([
-    {
-      name      = "${var.service_name}-container"
-      image     = "${var.aws_account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.service_name}:latest"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = var.container_port
-          protocol      = "tcp"
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.main.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-
-      environment = [
-        {
-          name  = "AWS_REGION"
-          value = var.aws_region
-        },
-        {
-          name  = "SPRING_PROFILES_ACTIVE"
-          value = var.environment == "prd" ? "prd" : "dev"
-        },
-        {
-          name  = "DYNAMODB_TABLE_NAME"
-          value = var.dynamodb_table_name
-        },
-        {
-          name  = "S3_BUCKET_NAME"
-          value = var.s3_bucket_name
-        },
-        {
-          name  = "COGNITO_USER_POOL_ID"
-          value = var.cognito_user_pool_id
-        }
-      ]
-    }
-  ])
+  container_definitions = templatefile("task_definition.json.tpl", local.task_definition_parameters)
 
   tags = {
-    Name = "${var.service_name}-task-def-${var.environment}"
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -306,23 +291,25 @@ resource "aws_ecs_service" "main" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
-    container_name   = "${var.service_name}-container"
-    container_port   = var.container_port
+    container_name   = local.container_name
+    container_port   = var.task_port
+  }
+
+  deployment_circuit_breaker {
+    enable   = false
+    rollback = false
   }
 
   deployment_configuration {
     maximum_percent            = 200
     minimum_healthy_percent    = 100
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
   }
 
   depends_on = [aws_lb_listener.main]
 
   tags = {
-    Name = local.service_name
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -360,7 +347,7 @@ resource "aws_appautoscaling_policy" "ecs_policy" {
 # ECR Repository
 # ----------------------
 resource "aws_ecr_repository" "main" {
-  name                 = var.service_name
+  name                 = var.env == "prd" ? "${var.service_name}-ecr-repo" : "${var.service_name}-ecr-repo-${var.env}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -368,7 +355,8 @@ resource "aws_ecr_repository" "main" {
   }
 
   tags = {
-    Name = "${var.service_name}-ecr-${var.environment}"
+    service = var.service_name,
+    env     = var.env
   }
 }
 
@@ -393,10 +381,3 @@ resource "aws_ecr_lifecycle_policy" "main" {
     ]
   })
 }
-
-locals {
-  cluster_name         = "${var.service_name}-cluster-${var.environment}"
-  service_name         = var.environment == "prd" ? var.service_name : "${var.service_name}-${var.environment}"
-  scaling_policy_name  = var.environment == "prd" ? "${var.service_name}-scaling-policy" : "${var.service_name}-scaling-policy-${var.environment}"
-}
-

@@ -2,7 +2,7 @@ variable "service_name" {
   type = string
 }
 
-variable "environment" {
+variable "env" {
   type = string
 }
 
@@ -47,9 +47,14 @@ variable "ecs_max_capacity" {
   default = 4
 }
 
-variable "container_port" {
+variable "task_port" {
   type    = number
   default = 8080
+}
+
+variable "task_admin_port" {
+  type    = number
+  default = 8081
 }
 
 variable "health_check_path" {
@@ -81,4 +86,3 @@ variable "aws_region" {
 variable "aws_account_id" {
   type = string
 }
-

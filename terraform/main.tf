@@ -10,9 +10,9 @@ terraform {
   backend "s3" {
     bucket         = "journal-app-terraform-state"
     key            = "terraform.tfstate"
-    region         = "us-east-1"
+    region         = "us-west-2"
     encrypt        = true
-    dynamodb_table = "terraform-locks"
+    dynamodb_table = "journal-app-terraform-locks"
   }
 }
 
@@ -21,9 +21,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = terraform.workspace
-      ServiceName = var.service_name
-      Terraform   = "true"
+      env = terraform.workspace
+      service = var.service_name
+      terraform   = "true"
     }
   }
 }

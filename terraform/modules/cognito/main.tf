@@ -1,3 +1,8 @@
+locals {
+  user_pool_name        = var.env == "prd" ? "${var.service_name}-user-pool" : "${var.service_name}-user-pool-${var.env}"
+  user_pool_client_name = var.env == "prd" ? "${var.service_name}-user-pool-client" : "${var.service_name}-user-pool-client-${var.env}"
+}
+
 resource "aws_cognito_user_pool" "main" {
   name = local.user_pool_name
 
@@ -29,7 +34,8 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   tags = {
-    Name = local.user_pool_name
+    service = var.service_name,
+    env = var.env
   }
 }
 
@@ -44,13 +50,14 @@ resource "aws_cognito_user_pool_client" "main" {
     "ALLOW_REFRESH_TOKEN_AUTH"
   ]
 
+  supported_identity_providers = ["COGNITO"]
+
+  refresh_token_rotation {
+    feature                    = "ENABLED"
+    retry_grace_period_seconds = 10
+  }
+
   refresh_token_validity       = 30
   enable_token_revocation      = true
   prevent_user_existence_errors = "ENABLED"
 }
-
-locals {
-  user_pool_name        = var.environment == "prd" ? "${var.service_name}-user-pool" : "${var.service_name}-user-pool-${var.environment}"
-  user_pool_client_name = var.environment == "prd" ? "${var.service_name}-user-pool-client" : "${var.service_name}-user-pool-client-${var.environment}"
-}
-

@@ -1,5 +1,5 @@
 # Production Environment Configuration
-aws_region   = "us-east-1"
+aws_region   = "us-west-2"
 service_name = "journal"
 
 # CloudFront Configuration

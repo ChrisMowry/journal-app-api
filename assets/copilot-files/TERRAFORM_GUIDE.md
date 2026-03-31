@@ -40,7 +40,10 @@ Before running Terraform, set up S3 backend for state management:
 
 ```powershell
 # Create S3 bucket for Terraform state
-aws s3 mb s3://journal-app-terraform-state --region us-east-1
+aws s3api create-bucket `
+  --bucket journal-app-terraform-state `
+  --region us-west-2 `
+  --create-bucket-configuration LocationConstraint=us-west-2
 
 # Create DynamoDB table for state locking
 aws dynamodb create-table `
@@ -48,23 +51,35 @@ aws dynamodb create-table `
   --attribute-definitions AttributeName=LockID,AttributeType=S `
   --key-schema AttributeName=LockID,KeyType=HASH `
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 `
-  --region us-east-1
+  --region us-west-2
 
 # Enable versioning on S3 bucket
 aws s3api put-bucket-versioning `
   --bucket journal-app-terraform-state `
   --versioning-configuration Status=Enabled `
-  --region us-east-1
+  --region us-west-2
 
 # Enable encryption on S3 bucket
 aws s3api put-bucket-encryption `
   --bucket journal-app-terraform-state `
   --server-side-encryption-configuration '{
     "Rules": [{
-      "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
+      "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
+      "BucketKeyEnabled": true
     }]
   }' `
-  --region us-east-1
+  --region us-west-2
+
+# Block public access
+aws s3api put-public-access-block `
+  --bucket journal-app-terraform-state `
+  --region us-west-2 `
+  --public-access-block-configuration '{
+    "BlockPublicAcls": true,
+    "IgnorePublicAcls": true,
+    "BlockPublicPolicy": true,
+    "RestrictPublicBuckets": true
+  }'
 ```
 
 ## Initialization
